@@ -1,3 +1,4 @@
 Flask==2.3.3
-sqlitecloud==1.0.0
 gunicorn==21.2.0
+sqlitecloud==0.0.84
+Werkzeug==2.3.7
