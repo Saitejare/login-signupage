@@ -3,19 +3,52 @@ import sqlite3
 import random
 import os
 
+# Security
+from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash
+
 app = Flask(__name__)
-app.secret_key = "secret_key"
+app.secret_key = "super_secret_key_change_this"
+
+
+# =========================
+# DATABASE CONNECTION
+# =========================
 
 def get_db_connection():
-    db_url = os.environ.get('DATABASE_URL')
-    if db_url and db_url.startswith('sqlitecloud://'):
-        import sqlitecloud
-        return sqlitecloud.connect(db_url)
-    else:
-        return sqlite3.connect('users.db')
 
-# Create database
+    db_url = os.environ.get("DATABASE_URL")
+
+    # If using SQLiteCloud
+    if db_url and db_url.startswith("sqlitecloud://"):
+        import sqlitecloud
+        conn = sqlitecloud.connect(db_url)
+        return conn
+
+    # Local SQLite fallback
+    conn = sqlite3.connect("users.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# =========================
+# SAFE COLUMN ADD
+# =========================
+
+def safe_add_column(cursor, sql):
+
+    try:
+        cursor.execute(sql)
+    except Exception:
+        pass
+
+
+# =========================
+# CREATE DATABASE TABLE
+# =========================
+
 def init_db():
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -30,36 +63,47 @@ def init_db():
         )
     """)
 
-    # Add columns if they don't exist (for migration)
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN mobile TEXT")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN nickname TEXT")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
-    except sqlite3.OperationalError:
-        pass
+    # Migration safety
+    safe_add_column(cursor,
+        "ALTER TABLE users ADD COLUMN mobile TEXT")
+
+    safe_add_column(cursor,
+        "ALTER TABLE users ADD COLUMN nickname TEXT")
+
+    safe_add_column(cursor,
+        "ALTER TABLE users ADD COLUMN email TEXT")
 
     conn.commit()
     conn.close()
 
+
 init_db()
 
-# Joke list
+
+# =========================
+# JOKES LIST
+# =========================
+
 jokes = [
+
     "Hey {}, you're hogging all the fun today!",
+
     "Why did the pig become an actor? Because he was a real ham!",
+
     "Hey {}, stay pig-tastic today!",
+
     "Why don't pigs use phones? Too many ham calls!",
+
     "Hey {}, you're oink-tastic!"
+
 ]
 
-# Signup
-@app.route("/signup", methods=["GET","POST"])
+
+# =========================
+# SIGNUP
+# =========================
+
+@app.route("/signup", methods=["GET", "POST"])
 def signup():
 
     if request.method == "POST":
@@ -70,8 +114,16 @@ def signup():
         nickname = request.form["nickname"]
         email = request.form["email"]
 
+        # Validate password (6 digits)
         if len(password) != 6 or not password.isdigit():
-            return render_template("signup.html", error="Password must be exactly 6 digits.")
+
+            return render_template(
+                "signup.html",
+                error="Password must be exactly 6 digits."
+            )
+
+        # Hash password
+        hashed_password = generate_password_hash(password)
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -79,14 +131,28 @@ def signup():
         try:
 
             cursor.execute(
-                "INSERT INTO users (username,password,mobile,nickname,email) VALUES (?,?,?,?,?)",
+                """
+                INSERT INTO users
                 (username,password,mobile,nickname,email)
+                VALUES (?,?,?,?,?)
+                """,
+                (
+                    username,
+                    hashed_password,
+                    mobile,
+                    nickname,
+                    email
+                )
             )
 
             conn.commit()
 
-        except sqlite3.IntegrityError:
-            return render_template("signup.html", error="Username already exists!")
+        except Exception:
+
+            return render_template(
+                "signup.html",
+                error="Username already exists!"
+            )
 
         finally:
             conn.close()
@@ -96,8 +162,11 @@ def signup():
     return render_template("signup.html")
 
 
-# Login
-@app.route("/", methods=["GET","POST"])
+# =========================
+# LOGIN
+# =========================
+
+@app.route("/", methods=["GET", "POST"])
 def login():
 
     if request.method == "POST":
@@ -109,8 +178,8 @@ def login():
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT * FROM users WHERE username=? AND password=?",
-            (username,password)
+            "SELECT * FROM users WHERE username=?",
+            (username,)
         )
 
         user = cursor.fetchone()
@@ -118,15 +187,29 @@ def login():
         conn.close()
 
         if user:
-            session["user"] = username
-            return redirect("/welcome")
-        else:
-            return render_template("login.html", error="Invalid username or password")
+
+            stored_password = user["password"]
+
+            # Check hashed password
+            if check_password_hash(
+                    stored_password,
+                    password):
+
+                session["user"] = username
+                return redirect("/welcome")
+
+        return render_template(
+            "login.html",
+            error="Invalid username or password"
+        )
 
     return render_template("login.html")
 
 
-# Welcome Page
+# =========================
+# WELCOME PAGE
+# =========================
+
 @app.route("/welcome")
 def welcome():
 
@@ -147,6 +230,10 @@ def welcome():
     )
 
 
+# =========================
+# LOGOUT
+# =========================
+
 @app.route("/logout")
 def logout():
 
@@ -155,5 +242,15 @@ def logout():
     return redirect("/")
 
 
+# =========================
+# RUN SERVER (RENDER READY)
+# =========================
+
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    port = int(os.environ.get("PORT", 5000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
