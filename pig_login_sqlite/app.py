@@ -3,7 +3,7 @@ import sqlite3
 import random
 import os
 
-# Security
+# Password Security
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 
@@ -19,15 +19,15 @@ def get_db_connection():
 
     db_url = os.environ.get("DATABASE_URL")
 
-    # If using SQLiteCloud
+    # SQLiteCloud connection
     if db_url and db_url.startswith("sqlitecloud://"):
+
         import sqlitecloud
         conn = sqlitecloud.connect(db_url)
         return conn
 
     # Local SQLite fallback
     conn = sqlite3.connect("users.db")
-    conn.row_factory = sqlite3.Row
     return conn
 
 
@@ -44,7 +44,7 @@ def safe_add_column(cursor, sql):
 
 
 # =========================
-# CREATE DATABASE TABLE
+# DATABASE INITIALIZATION
 # =========================
 
 def init_db():
@@ -81,7 +81,7 @@ init_db()
 
 
 # =========================
-# JOKES LIST
+# JOKES
 # =========================
 
 jokes = [
@@ -114,7 +114,7 @@ def signup():
         nickname = request.form["nickname"]
         email = request.form["email"]
 
-        # Validate password (6 digits)
+        # Password validation
         if len(password) != 6 or not password.isdigit():
 
             return render_template(
@@ -163,7 +163,7 @@ def signup():
 
 
 # =========================
-# LOGIN
+# LOGIN  (FIXED VERSION)
 # =========================
 
 @app.route("/", methods=["GET", "POST"])
@@ -188,20 +188,35 @@ def login():
 
         if user:
 
-            stored_password = user["password"]
+            try:
 
-            # Check hashed password
-            if check_password_hash(
-                    stored_password,
-                    password):
+                # SQLiteCloud returns tuple
+                stored_password = user[2]
 
-                session["user"] = username
-                return redirect("/welcome")
+                if check_password_hash(
+                        stored_password,
+                        password):
 
-        return render_template(
-            "login.html",
-            error="Invalid username or password"
-        )
+                    session["user"] = username
+                    return redirect("/welcome")
+
+                else:
+
+                    return render_template(
+                        "login.html",
+                        error="Wrong password"
+                    )
+
+            except Exception as e:
+
+                return f"Login Error: {str(e)}"
+
+        else:
+
+            return render_template(
+                "login.html",
+                error="User not found"
+            )
 
     return render_template("login.html")
 
