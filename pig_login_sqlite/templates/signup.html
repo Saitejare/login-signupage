@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Signup</title>
+
+<link rel="stylesheet"
+href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Create Account</h1>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="POST">
+
+<input
+type="text"
+name="username"
+placeholder="Username"
+required>
+
+<input
+type="text"
+name="mobile"
+placeholder="Mobile Number"
+required>
+
+<input
+type="text"
+name="nickname"
+placeholder="Nickname"
+required>
+
+<input
+type="email"
+name="email"
+placeholder="Email"
+required>
+
+<input
+type="password"
+name="password"
+placeholder="Password (6 digits)"
+pattern="[0-9]{6}"
+title="Password must be exactly 6 digits"
+required>
+
+<button>
+Signup
+</button>
+
+</form>
+
+<a href="/">
+Already have account? Login
+</a>
+
+</div>
+
+</body>
+
+</html>
